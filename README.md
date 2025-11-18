@@ -99,8 +99,6 @@ A comprehensive list of downloadable payloads
 - Research must be conducted ethically and legally
 - Unauthorized access is strictly prohibited
 
-## 📁 Repository Structuregulations
-
 ## 🛡️ Responsible Usage Framework
 
 ### Lab Environment Requirements:
